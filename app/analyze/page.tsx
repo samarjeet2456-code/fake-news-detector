@@ -118,13 +118,17 @@ export default function AnalyzePage() {
     const content = getContent()
     if (!content) return false
     if (activeTab === 'url') {
-      const urlPattern = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*\/?$/
-      return urlPattern.test(content)
+      try {
+        new URL(content.startsWith('http') ? content : `https://${content}`)
+        return true
+      } catch {
+        return false
+      }
     }
     return true
   }
 
-  const handleAnalyze = async () => {
+  const handleAnalyze = () => {
     if (!isValid()) {
       setError(activeTab === 'url' ? 'Please enter a valid URL.' : 'Please enter content to analyze.')
       return
@@ -133,10 +137,8 @@ export default function AnalyzePage() {
     setIsAnalyzing(true)
     setError('')
 
-    // Simulate analysis delay
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-
-    // Store the content for the result page
+    // Store the content for the result page and navigate immediately
+    // The actual AI analysis happens on the result page with a loading state
     sessionStorage.setItem('resultContent', getContent())
     sessionStorage.setItem('resultType', activeTab)
 
