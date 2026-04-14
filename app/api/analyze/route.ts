@@ -1,7 +1,9 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import Groq from 'groq-sdk';
 import { NextResponse } from 'next/server';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY,
+});
 
 export async function POST(req: Request) {
   try {
@@ -12,7 +14,12 @@ export async function POST(req: Request) {
     }
 
     const prompt = `Analyze the following news content and determine if it is real or fake news.
-Return ONLY a valid JSON object with exactly these fields:
+Respond with a JSON object containing the analysis.
+
+Content:
+${content}
+
+Required JSON format:
 {
   "verdict": "real" or "fake",
   "confidenceScore": integer 0-100,
@@ -22,17 +29,7 @@ Return ONLY a valid JSON object with exactly these fields:
   "clickbaitScore": integer 0-100,
   "explanation": "brief explanation string",
   "keywords": [{ "word": "string", "type": "positive" or "warning" }]
-}
-
-Content:
-${content}`;
-
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
-      generationConfig: {
-        responseMimeType: 'application/json',
-      },
-    });
+}`;
 
     let response;
     let attempts = 0;
@@ -40,58 +37,58 @@ ${content}`;
 
     while (attempts < 3) {
       try {
-        const result = await model.generateContent(prompt);
-        response = result.response;
+        response = await groq.chat.completions.create({
+          messages: [
+            {
+              role: 'system',
+              content: 'You are an expert news analyst specialized in identifying misinformation, bias, and clickbait. You always respond in valid JSON format.',
+            },
+            {
+              role: 'user',
+              content: prompt,
+            },
+          ],
+          model: 'llama-3.3-70b-versatile',
+          response_format: { type: 'json_object' },
+          temperature: 0.1,
+        });
         break;
       } catch (e: any) {
         attempts++;
         lastError = e;
+        console.error(`Groq attempt ${attempts} failed:`, e.message);
         
-        // Handle Rate Limit (429) specifically
-        if (e.message?.includes('429') || e.status === 429) {
+        if (e.status === 429) {
           return NextResponse.json(
-            { error: 'AI Rate limit reached. The free tier allows limited requests. Please wait a minute and try again.' },
+            { error: 'AI Rate limit reached. Please wait a moment.' },
             { status: 429 }
           );
         }
-
-        console.error(`AI attempt ${attempts} failed:`, e.message);
+        
         if (attempts >= 3) break;
-        await new Promise((resolve) => setTimeout(resolve, 2000 * attempts));
+        await new Promise((resolve) => setTimeout(resolve, 1000 * attempts));
       }
     }
 
-    if (!response) {
+    if (!response || !response.choices[0]?.message?.content) {
       throw new Error(
         'Unable to analyze content: ' +
-          (lastError?.message || 'Please ensure your GEMINI_API_KEY is set correctly in Vercel environment variables.')
+          (lastError?.message || 'Please ensure your GROQ_API_KEY is set correctly.')
       );
     }
 
-    const text = response.text();
-
-    if (!text) {
-      throw new Error('AI returned an empty response. Please try again.');
-    }
-
-    // Robust JSON parsing (handles markdown code blocks sometimes returned by Gemini)
-    let parsedResult;
-    try {
-      const cleanText = text.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
-      parsedResult = JSON.parse(cleanText);
-    } catch {
-      throw new Error('AI returned an invalid format. Please try again.');
-    }
+    const text = response.choices[0].message.content;
+    const parsedResult = JSON.parse(text);
 
     return NextResponse.json(parsedResult);
   } catch (error: any) {
     console.error('Error in analyze route:', error);
-    const status = error.message?.includes('limit') ? 429 : 500;
     return NextResponse.json(
       { error: error.message || 'Failed to analyze content' },
-      { status: status }
+      { status: 500 }
     );
   }
 }
+
 
 
