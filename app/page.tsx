@@ -36,7 +36,7 @@ const steps = [
     icon: Search,
     title: 'Submit Content',
     description:
-      'Paste your news article text or enter a URL to analyze its credibility.',
+      'Paste your news article text or enter a URL to analyze its credibility with us.',
   },
   {
     icon: Zap,
