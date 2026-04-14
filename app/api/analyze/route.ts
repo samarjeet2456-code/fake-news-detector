@@ -28,7 +28,7 @@ Content:
 ${content}`;
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-1.5-flash',
       generationConfig: {
         responseMimeType: 'application/json',
       },
@@ -46,6 +46,15 @@ ${content}`;
       } catch (e: any) {
         attempts++;
         lastError = e;
+        
+        // Handle Rate Limit (429) specifically
+        if (e.message?.includes('429') || e.status === 429) {
+          return NextResponse.json(
+            { error: 'AI Rate limit reached. The free tier allows limited requests. Please wait a minute and try again.' },
+            { status: 429 }
+          );
+        }
+
         console.error(`AI attempt ${attempts} failed:`, e.message);
         if (attempts >= 3) break;
         await new Promise((resolve) => setTimeout(resolve, 2000 * attempts));
@@ -77,10 +86,12 @@ ${content}`;
     return NextResponse.json(parsedResult);
   } catch (error: any) {
     console.error('Error in analyze route:', error);
+    const status = error.message?.includes('limit') ? 429 : 500;
     return NextResponse.json(
       { error: error.message || 'Failed to analyze content' },
-      { status: 500 }
+      { status: status }
     );
   }
 }
+
 

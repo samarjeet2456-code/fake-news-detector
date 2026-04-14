@@ -55,6 +55,7 @@ const mockResult = {
 export default function ResultPage() {
   const router = useRouter()
   const [isLoading, setIsLoading] = React.useState(true)
+  const [error, setError] = React.useState<string | null>(null)
   const [result, setResult] = React.useState(mockResult)
   const [copied, setCopied] = React.useState(false)
 
@@ -72,6 +73,9 @@ export default function ResultPage() {
     
     const analyzeData = async () => {
       try {
+        setError(null);
+        setIsLoading(true);
+
         const response = await fetch('/api/analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -123,8 +127,11 @@ export default function ResultPage() {
         }
       } catch (err: any) {
         console.error("Error generating analysis:", err);
-        if (isMounted) setIsLoading(false);
-        toast.error(err.message || "Failed to analyze content");
+        if (isMounted) {
+          setError(err.message || "Failed to analyze content");
+          setIsLoading(false);
+          toast.error(err.message || "Failed to analyze content");
+        }
       }
     };
 
@@ -134,6 +141,7 @@ export default function ResultPage() {
       isMounted = false;
     }
   }, [router])
+
 
   const handleShare = async () => {
     try {
@@ -174,30 +182,57 @@ export default function ResultPage() {
     return (
       <div className="container mx-auto px-4 md:px-6 py-12 md:py-20">
         <div className="max-w-4xl mx-auto space-y-8">
-          {/* Header Skeleton */}
           <div className="text-center space-y-4">
             <Skeleton className="h-10 w-48 mx-auto" />
             <Skeleton className="h-6 w-96 mx-auto" />
           </div>
-
-          {/* Verdict Card Skeleton */}
           <Skeleton className="h-48 w-full" />
-
-          {/* Score Cards Skeleton */}
           <div className="grid md:grid-cols-3 gap-4">
             <Skeleton className="h-32" />
             <Skeleton className="h-32" />
             <Skeleton className="h-32" />
           </div>
-
-          {/* Explanation Skeleton */}
           <Skeleton className="h-40 w-full" />
         </div>
       </div>
     )
   }
 
+  if (error) {
+
+    return (
+      <div className="container mx-auto px-4 md:px-6 py-12 md:py-20">
+        <div className="max-w-2xl mx-auto text-center space-y-6">
+          <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10 mb-2">
+            <AlertCircle className="h-10 w-10 text-destructive" />
+          </div>
+          <h1 className="text-3xl font-bold">Analysis Failed</h1>
+          <p className="text-muted-foreground text-lg">
+            {error.includes('limit') 
+              ? "The AI is currently busy (Rate Limit). Please wait about 30 seconds and try again."
+              : error}
+          </p>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+            <Button 
+              variant="default" 
+              onClick={() => window.location.reload()}
+              className="min-w-[140px]"
+            >
+              Try Again
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href="/analyze">
+                Go Back
+              </Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   const isReal = result.verdict === 'real'
+
 
   return (
     <div className="container mx-auto px-4 md:px-6 py-12 md:py-20">
